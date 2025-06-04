@@ -1040,12 +1040,13 @@ if __name__ == "__main__":
     import uvicorn
     import os
     
+    # Get port from environment variable (Render sets this) or default to 8000
     port = int(os.environ.get("PORT", 8000))
     
     uvicorn.run(
         app, 
-        host="0.0.0.0", 
-        port=port,
+        host="0.0.0.0",  # Important: use 0.0.0.0, not 127.0.0.1
+        port=port,       # Use the dynamic port
         title="Location & Weather API",
         description="Professional API with Swagger documentation and interactive demo"
     )
