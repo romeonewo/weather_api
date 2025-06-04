@@ -17,9 +17,6 @@ weather_api/
 ├── app/                  # Full application: API + demo HTML UI
 │   └── __pycache__/
 │
-├── .notebook/            # Notebook output or personal notes
-│   └── 20250604/
-│
 ├── demo.py               # Self-contained app (API + demo UI)
 ├── demo_0.py             # Another version of the self-contained app
 ├── requirements.txt      # Python dependencies
