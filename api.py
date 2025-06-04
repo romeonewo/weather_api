@@ -1041,7 +1041,7 @@ if __name__ == "__main__":
     import os
     
     # Get port from environment variable (Render sets this) or default to 8000
-    port = int(os.environ.get("PORT", 8000))
+    port = int(os.environ.get("PORT", 10000))
     
     uvicorn.run(
         app, 
