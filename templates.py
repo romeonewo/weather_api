@@ -1,48 +1,78 @@
-from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
-import httpx
-import json
-from datetime import datetime, timedelta
 
-app = FastAPI(title="Location & Weather Demo")
-
-# HTML template as a string for simplicity
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Location & Weather Demo</title>
+    <title>Location & Weather API Demo</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         body {
             font-family: 'Arial', sans-serif;
-            background: linear-gradient(135deg, #a8e6cf 0%, #dcedc1 100%);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             margin: 0;
             padding: 20px;
             min-height: 100vh;
         }
         
         .container {
-            max-width: 800px;
+            max-width: 1000px;
             margin: 0 auto;
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
-            padding: 30px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+            padding: 40px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
         }
         
         h1 {
-            text-align: center;
-            color: #2d5a3d;
+            color: #2d3748;
+            margin-bottom: 10px;
+            font-size: 3em;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .subtitle {
+            color: #718096;
+            font-size: 1.2em;
             margin-bottom: 30px;
-            font-size: 2.5em;
+        }
+        
+        .api-links {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .api-link {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            text-decoration: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .api-link:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
         }
         
         .button {
-            background: linear-gradient(45deg, #4CAF50, #45a049);
+            background: linear-gradient(45deg, #667eea, #764ba2);
             color: white;
             border: none;
             padding: 15px 30px;
@@ -50,137 +80,161 @@ HTML_TEMPLATE = """
             border-radius: 25px;
             cursor: pointer;
             transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
             margin: 10px;
         }
         
         .button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(76, 175, 80, 0.4);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
         }
         
         .button:disabled {
-            background: #cccccc;
+            background: #cbd5e0;
             cursor: not-allowed;
             transform: none;
             box-shadow: none;
         }
         
         .info-box {
-            background: #f8fff8;
-            border: 2px solid #4CAF50;
-            border-radius: 10px;
-            padding: 20px;
-            margin: 20px 0;
+            background: linear-gradient(135deg, #f7fafc, #edf2f7);
+            border: 2px solid #667eea;
+            border-radius: 15px;
+            padding: 25px;
+            margin: 25px 0;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        .info-box h3 {
+            color: #2d3748;
+            margin-top: 0;
+            font-size: 1.5em;
         }
         
         .location-info {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 15px;
             margin: 15px 0;
         }
         
         .info-item {
             background: white;
-            padding: 10px;
-            border-radius: 8px;
-            border-left: 4px solid #4CAF50;
+            padding: 15px;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
         
         .info-label {
             font-weight: bold;
-            color: #2d5a3d;
+            color: #2d3748;
+            margin-bottom: 5px;
         }
         
         #map {
             height: 400px;
             width: 100%;
-            border-radius: 10px;
+            border-radius: 15px;
             margin: 20px 0;
-            border: 2px solid #4CAF50;
+            border: 3px solid #667eea;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         }
         
         .weather-info {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin: 20px 0;
+            gap: 20px;
+            margin: 25px 0;
         }
         
         .weather-card {
-            background: linear-gradient(135deg, #e8f5e8, #f0f8f0);
-            padding: 15px;
-            border-radius: 10px;
+            background: linear-gradient(135deg, #f0f4ff, #e6f3ff);
+            padding: 20px;
+            border-radius: 15px;
             text-align: center;
-            border: 1px solid #4CAF50;
+            border: 2px solid #667eea;
+            transition: transform 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        .weather-card:hover {
+            transform: translateY(-5px);
         }
         
         .weather-icon {
-            font-size: 2em;
+            font-size: 2.5em;
             margin-bottom: 10px;
         }
         
         .loading {
             text-align: center;
-            color: #4CAF50;
+            color: #667eea;
             font-style: italic;
+            font-size: 1.1em;
         }
         
         .error {
-            color: #d32f2f;
-            background: #ffebee;
-            padding: 10px;
-            border-radius: 5px;
-            margin: 10px 0;
+            color: #e53e3e;
+            background: #fed7d7;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            border-left: 4px solid #e53e3e;
         }
         
-        /* Forecast styles */
         .forecast-container {
             margin-top: 30px;
         }
         
         .forecast-header {
             text-align: center;
-            margin-bottom: 20px;
-            color: #2d5a3d;
-            font-size: 1.5em;
+            margin-bottom: 25px;
+            color: #2d3748;
+            font-size: 1.8em;
         }
         
         .forecast-days {
             display: flex;
             overflow-x: auto;
-            gap: 15px;
-            padding: 10px 0;
+            gap: 20px;
+            padding: 15px 0;
         }
         
         .forecast-day {
-            min-width: 150px;
-            background: linear-gradient(135deg, #e8f5e8, #f0f8f0);
-            padding: 15px;
-            border-radius: 10px;
+            min-width: 180px;
+            background: linear-gradient(135deg, #f0f4ff, #e6f3ff);
+            padding: 20px;
+            border-radius: 15px;
             text-align: center;
-            border: 1px solid #4CAF50;
+            border: 2px solid #667eea;
+            transition: transform 0.3s ease;
+        }
+        
+        .forecast-day:hover {
+            transform: scale(1.05);
         }
         
         .forecast-date {
             font-weight: bold;
-            margin-bottom: 10px;
-            color: #2d5a3d;
+            margin-bottom: 15px;
+            color: #2d3748;
+            font-size: 1.1em;
         }
         
         .forecast-temp {
-            margin: 5px 0;
+            margin: 8px 0;
+            font-weight: 600;
         }
         
         .forecast-description {
             font-size: 0.9em;
-            color: #555;
+            color: #4a5568;
+            font-style: italic;
         }
         
-        /* Scrollbar styling */
         .forecast-days::-webkit-scrollbar {
-            height: 8px;
+            height: 10px;
         }
         
         .forecast-days::-webkit-scrollbar-track {
@@ -189,18 +243,25 @@ HTML_TEMPLATE = """
         }
         
         .forecast-days::-webkit-scrollbar-thumb {
-            background: #4CAF50;
+            background: linear-gradient(45deg, #667eea, #764ba2);
             border-radius: 10px;
         }
         
         .forecast-days::-webkit-scrollbar-thumb:hover {
-            background: #45a049;
+            background: linear-gradient(45deg, #5a67d8, #6b46c1);
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🌍 Location & Weather Demo</h1>
+        <div class="header">
+            <h1>🌍 Location & Weather API</h1>
+            <p class="subtitle">Professional API with Interactive Demo</p>
+            <div class="api-links">
+                <a href="/docs" class="api-link" target="_blank">📚 API Documentation</a>
+                <a href="/redoc" class="api-link" target="_blank">📖 ReDoc</a>
+            </div>
+        </div>
         
         <div style="text-align: center;">
             <button class="button" onclick="getCurrentLocation()">📍 Get Current Location</button>
@@ -219,12 +280,12 @@ HTML_TEMPLATE = """
                         <div id="region">Click "Get Current Location" first</div>
                     </div>
                     <div class="info-item">
-                        <div class="info-label">Latitude</div>
-                        <div id="latitude">Click "Get Current Location" first</div>
+                        <div class="info-label">Country</div>
+                        <div id="country">Click "Get Current Location" first</div>
                     </div>
                     <div class="info-item">
-                        <div class="info-label">Longitude</div>
-                        <div id="longitude">Click "Get Current Location" first</div>
+                        <div class="info-label">Coordinates</div>
+                        <div id="coordinates">Click "Get Current Location" first</div>
                     </div>
                 </div>
             </div>
@@ -243,7 +304,7 @@ HTML_TEMPLATE = """
                 <div id="weatherContent">
                     <p style="text-align: center; color: #666;">Click "Get Weather Condition" to see weather data</p>
                 </div>
-                <div class="weather-info" id="weatherCards">
+                <div class="weather-info" id="weatherCards" style="display: none;">
                     <div class="weather-card">
                         <div class="weather-icon" id="weatherIcon"></div>
                         <div class="info-label">Condition</div>
@@ -314,28 +375,24 @@ HTML_TEMPLATE = """
         async function getCurrentLocation() {
             showLoading();
             try {
-                const response = await fetch('/get-location');
+                const response = await fetch('/api/location');
                 const data = await response.json();
                 
-                console.log('Location data received:', data); // Debug log
+                console.log('Location data received:', data);
                 
                 if (data.status === 'success' || data.lat) {
-                    // Display location info
                     document.getElementById('city').textContent = data.city || 'Unknown';
                     document.getElementById('region').textContent = data.regionName || data.region || 'Unknown';
-                    document.getElementById('latitude').textContent = data.lat ? data.lat.toFixed(6) : 'Unknown';
-                    document.getElementById('longitude').textContent = data.lon ? data.lon.toFixed(6) : 'Unknown';
+                    document.getElementById('country').textContent = data.country || 'Unknown';
                     
-                    // Store coordinates
-                    currentLat = data.lat;
-                    currentLon = data.lon;
-                    
-                    // Initialize map if coordinates exist
                     if (data.lat && data.lon) {
+                        document.getElementById('coordinates').textContent = `${data.lat.toFixed(6)}, ${data.lon.toFixed(6)}`;
+                        currentLat = data.lat;
+                        currentLon = data.lon;
                         initMap(data.lat, data.lon, data.city || 'Your Location');
                     }
                 } else {
-                    showError('Failed to get location information. Response: ' + JSON.stringify(data));
+                    showError('Failed to get location information: ' + (data.message || 'Unknown error'));
                 }
             } catch (error) {
                 showError('Error getting location: ' + error.message);
@@ -367,17 +424,15 @@ HTML_TEMPLATE = """
             
             showLoading();
             try {
-                const response = await fetch(`/get-weather?lat=${currentLat}&lon=${currentLon}`);
+                const response = await fetch(`/api/weather?lat=${currentLat}&lon=${currentLon}`);
                 const data = await response.json();
                 
-                console.log('Weather data received:', data); // Debug log
+                console.log('Weather data received:', data);
                 
                 if (data.cod === 200) {
-                    // Hide the initial message
                     document.getElementById('weatherContent').style.display = 'none';
                     
-                    // Display weather info
-                    const temp = Math.round(data.main.temp - 273.15); // Convert Kelvin to Celsius
+                    const temp = Math.round(data.main.temp - 273.15);
                     const feelsLike = Math.round(data.main.feels_like - 273.15);
                     
                     document.getElementById('weatherMain').textContent = data.weather[0].main;
@@ -388,7 +443,6 @@ HTML_TEMPLATE = """
                     document.getElementById('windSpeed').textContent = `${data.wind.speed} m/s`;
                     document.getElementById('windDirection').textContent = data.wind.deg || 'N/A';
                     
-                    // Set weather icon
                     const weatherIcons = {
                         'Clear': '☀️',
                         'Clouds': '☁️',
@@ -401,7 +455,6 @@ HTML_TEMPLATE = """
                     };
                     document.getElementById('weatherIcon').textContent = weatherIcons[data.weather[0].main] || '🌤️';
                     
-                    // Show weather cards
                     document.getElementById('weatherCards').style.display = 'grid';
                     
                 } else {
@@ -422,23 +475,18 @@ HTML_TEMPLATE = """
             
             showLoading();
             try {
-                const response = await fetch(`/get-forecast?lat=${currentLat}&lon=${currentLon}`);
+                const response = await fetch(`/api/forecast?lat=${currentLat}&lon=${currentLon}`);
                 const data = await response.json();
                 
-                console.log('Forecast data received:', data); // Debug log
+                console.log('Forecast data received:', data);
                 
                 if (data.cod === "200") {
-                    // Hide the initial message
                     document.getElementById('forecastContent').style.display = 'none';
-                    
-                    // Show the forecast container
                     document.getElementById('forecastResult').style.display = 'block';
                     
-                    // Process forecast data
                     const forecastDays = document.getElementById('forecastDays');
                     forecastDays.innerHTML = '';
                     
-                    // Group forecasts by day
                     const dailyForecasts = {};
                     const today = new Date().toDateString();
                     
@@ -446,7 +494,6 @@ HTML_TEMPLATE = """
                         const date = new Date(forecast.dt * 1000);
                         const dayKey = date.toDateString();
                         
-                        // Skip today's forecasts
                         if (dayKey === today) return;
                         
                         if (!dailyForecasts[dayKey]) {
@@ -464,16 +511,15 @@ HTML_TEMPLATE = """
                         dailyForecasts[dayKey].count++;
                     });
                     
-                    // Create forecast cards for each day
+                    let dayCount = 0;
                     for (const dayKey in dailyForecasts) {
-                        if (Object.keys(dailyForecasts).length > 5) break; // Limit to 5 days
+                        if (dayCount >= 5) break;
                         
                         const day = dailyForecasts[dayKey];
                         const avgTemp = Math.round(day.temps.reduce((a, b) => a + b, 0) / day.temps.length);
                         const minTemp = Math.min(...day.temps);
                         const maxTemp = Math.max(...day.temps);
                         
-                        // Find the most common weather condition
                         const weatherCounts = {};
                         day.weather.forEach(w => {
                             const key = w.main;
@@ -483,7 +529,6 @@ HTML_TEMPLATE = """
                             a[1] > b[1] ? a : b)[0];
                         const weatherDesc = day.weather.find(w => w.main === mostCommonWeather).description;
                         
-                        // Weather icons
                         const weatherIcons = {
                             'Clear': '☀️',
                             'Clouds': '☁️',
@@ -495,11 +540,9 @@ HTML_TEMPLATE = """
                             'Fog': '🌫️'
                         };
                         
-                        // Format date
                         const options = { weekday: 'short', month: 'short', day: 'numeric' };
                         const formattedDate = day.date.toLocaleDateString(undefined, options);
                         
-                        // Create forecast card
                         const forecastCard = document.createElement('div');
                         forecastCard.className = 'forecast-day';
                         forecastCard.innerHTML = `
@@ -511,6 +554,7 @@ HTML_TEMPLATE = """
                         `;
                         
                         forecastDays.appendChild(forecastCard);
+                        dayCount++;
                     }
                     
                 } else {
@@ -527,68 +571,5 @@ HTML_TEMPLATE = """
 </html>
 """
 
-@app.get("/", response_class=HTMLResponse)
-async def home():
-    return HTML_TEMPLATE
-
-@app.get("/get-location")
-async def get_location(request: Request):
-    try:
-        # Get client IP - try different methods
-        forwarded_for = request.headers.get("x-forwarded-for")
-        real_ip = request.headers.get("x-real-ip")
-        client_ip = forwarded_for or real_ip or request.client.host
-        
-        # If running locally, use empty query to get current IP
-        if client_ip in ["127.0.0.1", "localhost", "::1"]:
-            url = "http://ip-api.com/json/"
-        else:
-            url = f"http://ip-api.com/json/{client_ip}"
-        
-        # Call IP-API
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url)
-            data = response.json()
-            
-        # Add debug info
-        data["debug_ip"] = client_ip
-        data["debug_url"] = url
-        
-        return data
-    except Exception as e:
-        return {"status": "fail", "message": str(e), "debug": "Exception in get_location"}
-
-@app.get("/get-weather")
-async def get_weather(lat: float, lon: float):
-    try:
-        api_key = "26ca4d17ab7073188de43040d3cbaf93"
-        url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={api_key}"
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url)
-            data = response.json()
-            
-        return data
-    except Exception as e:
-        return {"cod": 400, "message": str(e)}
-
-@app.get("/get-forecast")
-async def get_forecast(lat: float, lon: float):
-    try:
-        api_key = "26ca4d17ab7073188de43040d3cbaf93"
-        url = f"https://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&appid={api_key}"
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url)
-            data = response.json()
-            
-        return data
-    except Exception as e:
-        return {"cod": 400, "message": str(e)}
-
-if __name__ == "__main__":
-    import uvicorn
-    import os
-
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
+# Note: I've truncated the actual HTML/CSS content for brevity, 
+# but you should include the full template from your original code
